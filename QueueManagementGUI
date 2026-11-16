@@ -1,0 +1,264 @@
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import java.awt.*;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+
+public class QueueManagementGUI {
+
+    // LinkedHashSet extends HashSet: gives O(1) HashSet lookup & uniqueness
+    // while preserving the arrival order needed for a customer queue.
+    private final HashSet<String> customerQueue = new LinkedHashSet<>();
+
+    private JFrame frame;
+    private JTextField searchField;
+    private JTextArea resultArea;
+    private JButton addButton;
+    private JButton serviceButton;
+    private JButton showButton;
+
+    // Tracks whether resultArea currently displays output rather than user input
+    private boolean showingOutput = false;
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            QueueManagementGUI app = new QueueManagementGUI();
+            app.createAndShowGUI();
+        });
+    }
+
+    /**
+     * Builds the Swing GUI:
+     * - Top: Search Queue label + JTextField (press Enter to search)
+     * - Left: Add Customer, Service Customer, Show Queue buttons
+     * - Right: Shared JTextArea box for entering customer names and viewing results
+     */
+    public void createAndShowGUI() {
+        frame = new JFrame("Customer Queue Manager");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(620, 380);
+        frame.setLocationRelativeTo(null);
+
+        JPanel mainPanel = new JPanel(new BorderLayout(12, 12));
+        mainPanel.setBorder(new EmptyBorder(16, 16, 16, 16));
+
+        // Upper Search Bar
+        JPanel searchPanel = new JPanel(new BorderLayout(10, 0));
+        JLabel searchLabel = new JLabel("Search Queue:");
+        searchLabel.setFont(new Font("SansSerif", Font.BOLD, 14));
+
+        searchField = new JTextField();
+        searchField.setFont(new Font("SansSerif", Font.PLAIN, 14));
+        searchField.setToolTipText("Enter customer name and press Enter to search");
+        searchField.addActionListener(e -> searchQueue());
+
+        searchPanel.add(searchLabel, BorderLayout.WEST);
+        searchPanel.add(searchField, BorderLayout.CENTER);
+
+        // Left Buttons Column
+        JPanel buttonPanel = new JPanel(new GridLayout(3, 1, 0, 10));
+        buttonPanel.setPreferredSize(new Dimension(180, 0));
+
+        addButton = new JButton("Add Customer");
+        serviceButton = new JButton("Service Customer");
+        showButton = new JButton("Show Queue");
+
+        Font buttonFont = new Font("SansSerif", Font.PLAIN, 14);
+        addButton.setFont(buttonFont);
+        serviceButton.setFont(buttonFont);
+        showButton.setFont(buttonFont);
+
+        addButton.addActionListener(e -> addCustomer());
+        serviceButton.addActionListener(e -> serviceCustomer());
+        showButton.addActionListener(e -> showQueue());
+
+        buttonPanel.add(addButton);
+        buttonPanel.add(serviceButton);
+        buttonPanel.add(showButton);
+
+        // Right Text Box (Customer Name Input + Result Display)
+        resultArea = new JTextArea();
+        resultArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
+        resultArea.setLineWrap(true);
+        resultArea.setWrapStyleWord(true);
+        resultArea.setMargin(new Insets(8, 8, 8, 8));
+
+        // Clear displayed output automatically when the user starts typing a new name
+        resultArea.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyTyped(KeyEvent e) {
+                if (showingOutput
+                        && !e.isControlDown()
+                        && !e.isMetaDown()
+                        && !Character.isISOControl(e.getKeyChar())) {
+                    resultArea.setText("");
+                    showingOutput = false;
+                }
+            }
+        });
+
+        JScrollPane scrollPane = new JScrollPane(resultArea);
+
+        // Center Split: Buttons on Left, Text Box on Right
+        JPanel centerPanel = new JPanel(new BorderLayout(12, 0));
+        centerPanel.add(buttonPanel, BorderLayout.WEST);
+        centerPanel.add(scrollPane, BorderLayout.CENTER);
+
+        mainPanel.add(searchPanel, BorderLayout.NORTH);
+        mainPanel.add(centerPanel, BorderLayout.CENTER);
+
+        frame.setContentPane(mainPanel);
+        frame.setVisible(true);
+    }
+
+    /**
+     * Reads customer name(s) from the text box and records them in the HashSet.
+     */
+    public void addCustomer() {
+        if (showingOutput) {
+            displayResult("Type a customer name in this box first, then click Add Customer.");
+            return;
+        }
+
+        String rawInput = resultArea.getText().trim();
+        if (rawInput.isEmpty()) {
+            displayResult("Please type a customer name in this box first.");
+            return;
+        }
+
+        String[] lines = rawInput.split("\\R+");
+        StringBuilder feedback = new StringBuilder();
+        int addedCount = 0;
+
+        for (String line : lines) {
+            String name = line.trim();
+            if (name.isEmpty()) {
+                continue;
+            }
+            if (containsIgnoreCase(name)) {
+                feedback.append("Already in queue: ").append(name).append("\n");
+            } else {
+                customerQueue.add(name);
+                feedback.append("Recorded customer: ").append(name).append("\n");
+                addedCount++;
+            }
+        }
+
+        feedback.append("\nTotal in queue: ").append(customerQueue.size());
+        if (addedCount > 0) {
+            feedback.append("\n(Start typing to add another customer)");
+        }
+        displayResult(feedback.toString());
+    }
+
+    /**
+     * Services (removes) the first customer waiting in the HashSet queue.
+     */
+    public void serviceCustomer() {
+        if (customerQueue.isEmpty()) {
+            displayResult("Queue is empty. No customers to service.");
+            return;
+        }
+
+        Iterator<String> iterator = customerQueue.iterator();
+        String nextCustomer = iterator.next();
+        iterator.remove();
+
+        displayResult(
+            "Serviced customer: " + nextCustomer + "\n" +
+            "Remaining in queue: " + customerQueue.size()
+        );
+    }
+
+    /**
+     * Displays all recorded customers in the right-side text box.
+     */
+    public void showQueue() {
+        if (customerQueue.isEmpty()) {
+            displayResult("The queue is currently empty.");
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("Current Queue (").append(customerQueue.size()).append("):\n");
+        sb.append("-------------------------\n");
+
+        int position = 1;
+        for (String customer : customerQueue) {
+            sb.append(position).append(". ").append(customer).append("\n");
+            position++;
+        }
+
+        displayResult(sb.toString());
+    }
+
+    /**
+     * Searches the HashSet queue when Enter is pressed in the upper search box.
+     */
+    public void searchQueue() {
+        String query = searchField.getText().trim();
+        if (query.isEmpty()) {
+            displayResult("Enter a customer name in Search Queue and press Enter.");
+            return;
+        }
+
+        if (customerQueue.isEmpty()) {
+            displayResult("Search \"" + query + "\": Queue is currently empty.");
+            return;
+        }
+
+        // O(1) exact HashSet lookup
+        if (customerQueue.contains(query)) {
+            int pos = getQueuePosition(query);
+            displayResult("FOUND: \"" + query + "\" is in the queue at position #" + pos + ".");
+            return;
+        }
+
+        // Case-insensitive partial match fallback
+        int position = 1;
+        StringBuilder matches = new StringBuilder();
+        for (String customer : customerQueue) {
+            if (customer.toLowerCase().contains(query.toLowerCase())) {
+                matches.append("#").append(position).append(" - ").append(customer).append("\n");
+            }
+            position++;
+        }
+
+        if (matches.length() > 0) {
+            displayResult("Matches for \"" + query + "\":\n" + matches);
+        } else {
+            displayResult("NOT FOUND: \"" + query + "\" is not in the queue.");
+        }
+    }
+
+    private boolean containsIgnoreCase(String name) {
+        if (customerQueue.contains(name)) {
+            return true;
+        }
+        for (String existing : customerQueue) {
+            if (existing.equalsIgnoreCase(name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private int getQueuePosition(String target) {
+        int pos = 1;
+        for (String customer : customerQueue) {
+            if (customer.equals(target)) {
+                return pos;
+            }
+            pos++;
+        }
+        return -1;
+    }
+
+    private void displayResult(String message) {
+        resultArea.setText(message);
+        showingOutput = true;
+    }
+}
