@@ -1,0 +1,154 @@
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import java.awt.*;
+import java.awt.event.*;
+import java.util.*;
+
+public class QueueManagementGUI {
+    private final HashSet<String> customerQueue = new LinkedHashSet<>();
+    private JTextField searchField;
+    private JTextArea resultArea;
+    private boolean showingOutput = false;
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> new QueueManagementGUI().createAndShowGUI());
+    }
+
+    public void createAndShowGUI() {
+        JFrame frame = new JFrame("Customer Queue Manager");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(620, 380);
+        frame.setLocationRelativeTo(null);
+
+        JLabel searchLabel = new JLabel("Search Queue:");
+        searchLabel.setFont(new Font("SansSerif", Font.BOLD, 14));
+        searchField = new JTextField();
+        searchField.setFont(new Font("SansSerif", Font.PLAIN, 14));
+        searchField.setToolTipText("Enter customer name and press Enter to search");
+        searchField.addActionListener(e -> searchQueue());
+
+        JPanel searchPanel = new JPanel(new BorderLayout(10, 0));
+        searchPanel.add(searchLabel, BorderLayout.WEST);
+        searchPanel.add(searchField, BorderLayout.CENTER);
+
+        JPanel buttonPanel = new JPanel(new GridLayout(3, 1, 0, 10));
+        buttonPanel.setPreferredSize(new Dimension(180, 0));
+        buttonPanel.add(makeButton("Add Customer", this::addCustomer));
+        buttonPanel.add(makeButton("Service Customer", this::serviceCustomer));
+        buttonPanel.add(makeButton("Show Queue", this::showQueue));
+
+        resultArea = new JTextArea();
+        resultArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
+        resultArea.setLineWrap(true);
+        resultArea.setWrapStyleWord(true);
+        resultArea.setMargin(new Insets(8, 8, 8, 8));
+        resultArea.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyTyped(KeyEvent e) {
+                if (showingOutput && !e.isControlDown() && !e.isMetaDown() && !Character.isISOControl(e.getKeyChar())) {
+                    resultArea.setText("");
+                    showingOutput = false;
+                }
+            }
+        });
+
+        JPanel centerPanel = new JPanel(new BorderLayout(12, 0));
+        centerPanel.add(buttonPanel, BorderLayout.WEST);
+        centerPanel.add(new JScrollPane(resultArea), BorderLayout.CENTER);
+
+        JPanel mainPanel = new JPanel(new BorderLayout(12, 12));
+        mainPanel.setBorder(new EmptyBorder(16, 16, 16, 16));
+        mainPanel.add(searchPanel, BorderLayout.NORTH);
+        mainPanel.add(centerPanel, BorderLayout.CENTER);
+
+        frame.setContentPane(mainPanel);
+        frame.setVisible(true);
+    }
+
+    private JButton makeButton(String text, Runnable action) {
+        JButton btn = new JButton(text);
+        btn.setFont(new Font("SansSerif", Font.PLAIN, 14));
+        btn.addActionListener(e -> action.run());
+        return btn;
+    }
+
+    public void addCustomer() {
+        if (showingOutput) {
+            show("Type a customer name in this box first, then click Add Customer.");
+            return;
+        }
+        String input = resultArea.getText().trim();
+        if (input.isEmpty()) {
+            show("Please type a customer name in this box first.");
+            return;
+        }
+        StringBuilder sb = new StringBuilder();
+        int added = 0;
+        for (String line : input.split("\\R+")) {
+            String name = line.trim();
+            if (name.isEmpty()) continue;
+            boolean exists = customerQueue.contains(name) || customerQueue.stream().anyMatch(name::equalsIgnoreCase);
+            if (exists) {
+                sb.append("Already in queue: ").append(name).append('\n');
+            } else {
+                customerQueue.add(name);
+                sb.append("Recorded customer: ").append(name).append('\n');
+                added++;
+            }
+        }
+        sb.append("\nTotal in queue: ").append(customerQueue.size());
+        if (added > 0) sb.append("\n(Start typing to add another customer)");
+        show(sb.toString());
+    }
+
+    public void serviceCustomer() {
+        if (customerQueue.isEmpty()) {
+            show("Queue is empty. No customers to service.");
+            return;
+        }
+        Iterator<String> it = customerQueue.iterator();
+        String next = it.next();
+        it.remove();
+        show("Serviced customer: " + next + "\nRemaining in queue: " + customerQueue.size());
+    }
+
+    public void showQueue() {
+        if (customerQueue.isEmpty()) {
+            show("The queue is currently empty.");
+            return;
+        }
+        StringBuilder sb = new StringBuilder("Current Queue (" + customerQueue.size() + "):\n-------------------------\n");
+        int pos = 1;
+        for (String c : customerQueue) sb.append(pos++).append(". ").append(c).append('\n');
+        show(sb.toString());
+    }
+
+    public void searchQueue() {
+        String q = searchField.getText().trim();
+        if (q.isEmpty()) {
+            show("Enter a customer name in Search Queue and press Enter.");
+            return;
+        }
+        if (customerQueue.isEmpty()) {
+            show("Search \"" + q + "\": Queue is currently empty.");
+            return;
+        }
+        if (customerQueue.contains(q)) {
+            int pos = new ArrayList<>(customerQueue).indexOf(q) + 1;
+            show("FOUND: \"" + q + "\" is in the queue at position #" + pos + ".");
+            return;
+        }
+        StringBuilder matches = new StringBuilder();
+        int pos = 1;
+        for (String c : customerQueue) {
+            if (c.toLowerCase().contains(q.toLowerCase())) matches.append('#').append(pos).append(" - ").append(c).append('\n');
+            pos++;
+        }
+        show(matches.length() > 0 ? "Matches for \"" + q + "\":\n" + matches : "NOT FOUND: \"" + q + "\" is not in the queue.");
+    }
+
+    private void show(String msg) {
+        resultArea.setText(msg);
+        showingOutput = true;
+    }
+}
